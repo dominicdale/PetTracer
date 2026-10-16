@@ -33,6 +33,7 @@ npm run build
 
 - Select **Try demo** for a fictional walk; **Exit demo** restores your local archive.
 - Import a JSON array with `{ "lat": 51.5, "lng": -0.09, "time": "2026-10-16T10:00:00Z" }` records, or a simple unquoted CSV with `lat,lng,time` columns. Files may be up to 2 MB; timestamps must include a timezone.
+- Firefox users can copy a PetTracer device JSON response from Developer Tools → Network → XHR → Response and use **Paste PetTracer JSON**. Positioned `fiFo` telegrams and `lastPos` are imported; radio/status telegrams without coordinates are ignored. The JSON is processed locally and is not uploaded. Responses can contain real locations, device identifiers and raw telegrams, so do not share or commit them.
 - Tap the map to add a named place and radius. Mark one as home to estimate time outside its radius. Place buttons centre the map.
 - **Export JSON** saves all points and places, regardless of date filters. Reimport that file to restore. A backup with places replaces local places; ordinary point imports merge with existing fixes.
 - Data is stored in this browser's localStorage. Private browsing, clearing site data, and storage quotas can affect retention. Back up regularly. The shared archive is manually synced, not live; sync on each phone after edits. Point imports are idempotent. Places are merged by ID, and local edits win on sync. Concurrent edits are not collaboratively resolved. Place deletion/editing and multiple collar profiles are not implemented.

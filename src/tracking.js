@@ -2,11 +2,12 @@ export function normalizePoints(input) {
   if (!Array.isArray(input)) throw new Error('Expected a JSON array of tracking points.');
   const points = input.map((p, index) => {
     const lat = Number(p.lat), lng = Number(p.lng);
-    const time = Date.parse(p.time);
+    const rawTime = typeof p.time === 'string' ? p.time.replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : p.time;
+    const time = Date.parse(rawTime);
     if (p.lat == null || p.lng == null || p.lat === '' || p.lng === '' || !Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lng) || Math.abs(lng) > 180 || !Number.isFinite(time)) {
       throw new Error(`Point ${index + 1}: provide valid lat, lng and an ISO timestamp in time.`);
     }
-    if (typeof p.time !== 'string' || !/(Z|[+-]\d{2}:\d{2})$/.test(p.time)) throw new Error(`Point ${index + 1}: time must include a timezone (Z or +HH:MM).`);
+    if (typeof rawTime !== 'string' || !/(Z|[+-]\d{2}:\d{2})$/.test(rawTime)) throw new Error(`Point ${index + 1}: time must include a timezone (Z, +HH:MM, or +HHMM).`);
     return { lat, lng, time: new Date(time).toISOString() };
   });
   return [...new Map(points.map(p => [`${p.time}/${p.lat}/${p.lng}`, p])).values()].sort((a, b) => a.time.localeCompare(b.time));
@@ -50,7 +51,24 @@ export function analyze(points, places = [], maxGapMinutes = 15) {
 export function parseImport(text, filename) {
   if (filename.toLowerCase().endsWith('.json')) {
     const data = JSON.parse(text);
-    return normalizePoints(Array.isArray(data) ? data : data.points);
+    if (Array.isArray(data) || Array.isArray(data.points)) return normalizePoints(Array.isArray(data) ? data : data.points);
+    if (Array.isArray(data.fiFo) || data.lastPos) {
+      const fixes = (data.fiFo || []).flatMap(item => {
+        const telegram = item?.telegram;
+        if (telegram?.latitude == null || telegram?.longitude == null) return [];
+        return [{ lat: telegram.latitude, lng: telegram.longitude, time: telegram.timeDev || telegram.timeDb }];
+      });
+      if (data.lastPos?.posLat != null && data.lastPos?.posLong != null) {
+        fixes.push({
+          lat: data.lastPos.posLat,
+          lng: data.lastPos.posLong,
+          time: data.lastPos.timeMeasure || data.lastPos.timeDb
+        });
+      }
+      if (!fixes.length) throw new Error('This PetTracer response contains no positioned fixes.');
+      return normalizePoints(fixes);
+    }
+    throw new Error('JSON must be a Fieldnotes archive, a point array, or a PetTracer device response.');
   }
   const lines = text.trim().split(/\r?\n/);
   const header = lines.shift().replace(/^\uFEFF/, '').split(',').map(s => s.trim());

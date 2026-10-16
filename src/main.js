@@ -15,13 +15,14 @@ document.querySelector('#app').innerHTML = `
   <main>
     <header><div><p class="eyebrow">A LITTLE MORE ROOM TO ROAM</p><h1>Fieldnotes<span> / </span><small>PetTracer</small></h1></div><span class="status"><i></i> <span id="source">Local archive</span></span></header>
     <section class="intro"><div><p class="eyebrow">THE WORLD, THROUGH THEIR WANDERINGS</p><h2>Every adventure.<br><em>A little better understood.</em></h2><p>A home for their paths, favourite places, and days outdoors.</p></div><div class="intro-note"><span class="sun">✳</span><p>Small paws.<br>Quite a big world.</p></div></section>
-    <div class="toolbar"><div class="tabs" aria-label="History range"><button data-range="all" class="active">All time</button><button data-range="7">7 days</button><button data-range="1">Today</button></div><div class="dates"><label>From <input id="from" type="date"></label><label>To <input id="to" type="date"></label></div><div class="actions"><button id="demo">Try demo</button><label class="button primary" for="import">＋ Import points</label><input id="import" type="file" accept=".csv,.json" hidden></div></div>
+    <div class="toolbar"><div class="tabs" aria-label="History range"><button data-range="all" class="active">All time</button><button data-range="7">7 days</button><button data-range="1">Today</button></div><div class="dates"><label>From <input id="from" type="date"></label><label>To <input id="to" type="date"></label></div><div class="actions"><button id="demo">Try demo</button><button id="paste">Paste PetTracer JSON</button><label class="button primary" for="import">＋ Import file</label><input id="import" type="file" accept=".csv,.json" hidden></div></div>
     <p id="notice" role="status" aria-live="polite">Live PetTracer sync is not connected. Import your own data or explore the demo.</p>
     <section class="stats" aria-label="Tracking statistics"><article><p>RECORDED POINTS</p><strong id="count">0</strong><span>in the selected period</span></article><article><p>RECORDED PATH</p><strong id="distance">0 <small>km</small></strong><span>between nearby GPS fixes</span></article><article><p>ESTIMATED TIME OUTSIDE</p><strong id="outside">—</strong><span>outside your home radius</span></article><article><p>OBSERVED TIME</p><strong id="observed">0m</strong><span id="unknown">No recorded intervals yet</span></article></section>
     <section class="explorer"><div class="map-card"><div class="card-heading"><div><p class="eyebrow">FOLLOW THE FOOTSTEPS</p><h3>The wandering map</h3></div><button id="fit">↗ Fit path</button></div><div id="map" aria-label="Interactive tracking map"></div><p id="mapStatus" role="status" hidden></p><div class="map-footer"><span><i></i> Recorded path</span><label><input type="checkbox" id="showPoints" checked> Show points</label><span id="latest">No locations yet</span></div></div>
     <aside class="places-card"><p class="eyebrow">THE PLACES THEY CHOOSE</p><h3>Familiar corners</h3><p class="muted">Tap the map to mark home or a favourite spot.</p><form id="placeForm" hidden><label>Place name<input id="placeName" maxlength="100" required placeholder="The garden"></label><label>Radius in metres<input id="radius" type="number" min="5" max="10000" value="50" required></label><label class="check"><input id="isHome" type="checkbox"> This is home</label><button class="primary" type="submit">Save place</button><button id="cancelPlace" type="button">Cancel</button></form><div id="places"></div><div class="method"><span>↗</span><p>Time is estimated from consecutive fixes up to 15 minutes apart. Longer gaps are unknown. A home radius estimates time away from home; it cannot detect indoors.</p></div></aside></section>
     <section class="archive"><div><p class="eyebrow">KEEP THE WHOLE STORY</p><h3>Your lifetime archive</h3><p>${staticDeployment ? 'Points stay privately in this browser. Export a backup to move them between phones.' : 'Points stay in this browser until you back them up or share them.'}</p></div><div class="archive-actions"><button id="export">↓ Export JSON</button><button id="sync" ${staticDeployment ? 'disabled title="Server sync needs a private backend"' : ''}>${staticDeployment ? 'Shared sync unavailable' : '↻ Sync shared archive'}</button><button id="clear">Clear local data</button></div></section>
     <footer><span>FIELDNOTES / made for curious creatures</span><span>Independent companion interface · Not affiliated with PetTracer</span></footer>
+    <dialog id="pasteDialog"><form method="dialog"><p class="eyebrow">IMPORT FROM PETTRACER</p><h3>Paste a device response</h3><p>In Firefox's Network panel, copy only the JSON response. It is processed in this browser and is not uploaded.</p><label for="pastedJson">PetTracer JSON</label><textarea id="pastedJson" rows="10" spellcheck="false" placeholder="{ &quot;fiFo&quot;: [...] }"></textarea><div><button value="cancel">Cancel</button><button id="importPasted" class="primary" value="default">Import fixes</button></div></form></dialog>
   </main>`;
 
 const map = L.map('map', { zoomControl: false }).setView([51.505, -0.09], 14);
@@ -92,19 +93,30 @@ $('placeForm').onsubmit = event => {
   try { persist(); } catch { notify('Browser storage is full. Export a backup before closing.'); }
   $('placeForm').hidden = true; $('placeForm').reset(); pendingPlace = null; render();
 };
-$('import').onchange = async event => {
-  const file = event.target.files[0]; if (!file) return;
+function importText(text, filename) {
   try {
-    if (file.size > 2000000) throw new Error('Import files up to 2 MB at a time.');
-    const text = await file.text();
-    const imported = parseImport(text, file.name);
-    const archivePlaces = file.name.toLowerCase().endsWith('.json') ? JSON.parse(text).places : null;
+    if (text.length > 2000000) throw new Error('Import up to 2 MB at a time.');
+    const imported = parseImport(text, filename);
+    const archivePlaces = filename.toLowerCase().endsWith('.json') ? JSON.parse(text).places : null;
     if (archivePlaces && (!Array.isArray(archivePlaces) || archivePlaces.length > 100 || archivePlaces.some(p => typeof p.id !== 'string' || typeof p.name !== 'string' || !Number.isFinite(p.lat) || Math.abs(p.lat) > 90 || !Number.isFinite(p.lng) || Math.abs(p.lng) > 180 || !Number.isFinite(p.radius) || p.radius < 5 || p.radius > 10000 || typeof p.home !== 'boolean') || archivePlaces.filter(p => p.home).length > 1)) throw new Error('Invalid places in archive.');
     const previous = demo ? [] : points;
     points = mergePoints(previous, imported); if (demo) places = []; if (archivePlaces) places = archivePlaces; demo = false; $('demo').textContent = 'Try demo';
     persist(); render(true); notify(`Imported ${imported.length} points. Duplicate fixes are kept only once.`);
   } catch (error) { notify(error.message); }
+}
+$('import').onchange = async event => {
+  const file = event.target.files[0]; if (!file) return;
+  if (file.size > 2000000) notify('Import files up to 2 MB at a time.');
+  else importText(await file.text(), file.name);
   event.target.value = '';
+};
+$('paste').onclick = () => { $('pastedJson').value = ''; $('pasteDialog').showModal(); $('pastedJson').focus(); };
+$('importPasted').onclick = event => {
+  event.preventDefault();
+  const text = $('pastedJson').value.trim();
+  if (!text) { notify('Paste a PetTracer JSON response first.'); return; }
+  importText(text, 'pettracer.json');
+  $('pasteDialog').close();
 };
 function mergePoints(a, b) { return [...new Map([...a, ...b].map(p => [`${p.time}/${p.lat}/${p.lng}`, p])).values()].sort((x, y) => x.time.localeCompare(y.time)); }
 $('export').onclick = () => {

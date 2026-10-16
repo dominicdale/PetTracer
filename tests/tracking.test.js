@@ -32,3 +32,21 @@ test('CSV supports reordered columns and timezone-aware times', () => {
   assert.equal(parseImport('time,lng,lat\n2026-10-16T10:00:00Z,0,51', 'fixes.csv')[0].lat, 51);
   assert.throws(() => parseImport('latitude,longitude\n51,0', 'fixes.csv'));
 });
+test('PetTracer device responses import only positioned fixes', () => {
+  const response = {
+    lastPos: { posLat: 51.2, posLong: -0.3, timeMeasure: '2026-10-16T10:05:00.000+0000' },
+    fiFo: [
+      { telegram: { latitude: null, longitude: null, timeDb: '2026-10-16T10:04:00.000+0000' } },
+      { telegram: { latitude: 51.1, longitude: -0.2, timeDev: '2026-10-16T10:00:00.000+0000' } },
+      { telegram: { latitude: 51.2, longitude: -0.3, timeDev: '2026-10-16T10:05:00.000+0000' } }
+    ]
+  };
+  const points = parseImport(JSON.stringify(response), 'pettracer.json');
+  assert.deepEqual(points, [
+    { lat: 51.1, lng: -0.2, time: '2026-10-16T10:00:00.000Z' },
+    { lat: 51.2, lng: -0.3, time: '2026-10-16T10:05:00.000Z' }
+  ]);
+});
+test('PetTracer responses without positioned fixes are rejected', () => {
+  assert.throws(() => parseImport(JSON.stringify({ fiFo: [{ telegram: { latitude: null, longitude: null } }] }), 'pettracer.json'), /no positioned fixes/);
+});
