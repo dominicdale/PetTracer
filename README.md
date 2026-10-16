@@ -53,6 +53,7 @@ Cloudflare account setup and deployment have not been executed. Do not enable re
 1. Create a D1 database named `pettracer` using the Cloudflare dashboard or `npx wrangler d1 create pettracer`. Replace the placeholder `database_id` in `wrangler.toml` with the returned ID. This is an identifier, not a secret.
 2. Apply the production migration: `npx wrangler d1 migrations apply pettracer --remote`.
 3. Create a Pages project, with build command `npm run build` and output directory `dist`. The repository root contains `functions/`; Pages compiles these server-side routes separately. Choose Node 24 for builds. Bind the D1 database as `DB` (the wrangler file declares the binding).
+   If Cloudflare asks for a deploy command, use `npm run deploy`. Do not use `npx wrangler deploy`; that command deploys Workers rather than Pages.
 4. In Cloudflare Zero Trust, create a self-hosted Access application covering the **entire production hostname**, with a policy allowing only your and your partner's email addresses. Configure an identity provider such as email one-time PIN.
 5. Set Pages runtime variables `ACCESS_TEAM_DOMAIN` to your actual `your-team.cloudflareaccess.com` hostname and `ACCESS_AUD` to the application's audience tag. Both are non-secret identifiers. Redeploy after configuration. The API verifies Access JWT signatures, issuer and audience, and rejects cross-origin mutations. It does not trust email headers alone.
 6. Protect preview deployments with Access as well or disable them for real data. Never use demo mode to validate private access.
