@@ -4,12 +4,14 @@ import './style.css';
 import { analyze, normalizePoints, parseImport } from './tracking.js';
 
 const $ = id => document.getElementById(id);
+const staticDeployment = import.meta.env.VITE_STATIC_DEPLOYMENT === 'true';
+const baseUrl = import.meta.env.BASE_URL;
 let saved;
 try { saved = JSON.parse(localStorage.getItem('pettracer.archive.v1') || 'null'); } catch { /* Recover with an empty archive. */ }
 let points = [], places = [], demo = false, pendingPlace = null;
 try { points = normalizePoints(saved?.points || []); places = saved?.places || []; } catch { /* Invalid storage must not prevent startup. */ }
 document.querySelector('#app').innerHTML = `
-  <aside class="rail"><a class="brand" href="/" aria-label="Fieldnotes home">p<span>·</span></a><span class="rail-label">PETTRACER</span><span class="rail-bottom">FIELD<br>NOTES</span></aside>
+  <aside class="rail"><a class="brand" href="${baseUrl}" aria-label="Fieldnotes home">p<span>·</span></a><span class="rail-label">PETTRACER</span><span class="rail-bottom">FIELD<br>NOTES</span></aside>
   <main>
     <header><div><p class="eyebrow">A LITTLE MORE ROOM TO ROAM</p><h1>Fieldnotes<span> / </span><small>PetTracer</small></h1></div><span class="status"><i></i> <span id="source">Local archive</span></span></header>
     <section class="intro"><div><p class="eyebrow">THE WORLD, THROUGH THEIR WANDERINGS</p><h2>Every adventure.<br><em>A little better understood.</em></h2><p>A home for their paths, favourite places, and days outdoors.</p></div><div class="intro-note"><span class="sun">✳</span><p>Small paws.<br>Quite a big world.</p></div></section>
@@ -18,7 +20,7 @@ document.querySelector('#app').innerHTML = `
     <section class="stats" aria-label="Tracking statistics"><article><p>RECORDED POINTS</p><strong id="count">0</strong><span>in the selected period</span></article><article><p>RECORDED PATH</p><strong id="distance">0 <small>km</small></strong><span>between nearby GPS fixes</span></article><article><p>ESTIMATED TIME OUTSIDE</p><strong id="outside">—</strong><span>outside your home radius</span></article><article><p>OBSERVED TIME</p><strong id="observed">0m</strong><span id="unknown">No recorded intervals yet</span></article></section>
     <section class="explorer"><div class="map-card"><div class="card-heading"><div><p class="eyebrow">FOLLOW THE FOOTSTEPS</p><h3>The wandering map</h3></div><button id="fit">↗ Fit path</button></div><div id="map" aria-label="Interactive tracking map"></div><p id="mapStatus" role="status" hidden></p><div class="map-footer"><span><i></i> Recorded path</span><label><input type="checkbox" id="showPoints" checked> Show points</label><span id="latest">No locations yet</span></div></div>
     <aside class="places-card"><p class="eyebrow">THE PLACES THEY CHOOSE</p><h3>Familiar corners</h3><p class="muted">Tap the map to mark home or a favourite spot.</p><form id="placeForm" hidden><label>Place name<input id="placeName" maxlength="100" required placeholder="The garden"></label><label>Radius in metres<input id="radius" type="number" min="5" max="10000" value="50" required></label><label class="check"><input id="isHome" type="checkbox"> This is home</label><button class="primary" type="submit">Save place</button><button id="cancelPlace" type="button">Cancel</button></form><div id="places"></div><div class="method"><span>↗</span><p>Time is estimated from consecutive fixes up to 15 minutes apart. Longer gaps are unknown. A home radius estimates time away from home; it cannot detect indoors.</p></div></aside></section>
-    <section class="archive"><div><p class="eyebrow">KEEP THE WHOLE STORY</p><h3>Your lifetime archive</h3><p>Points stay in this browser until you back them up or share them.</p></div><div class="archive-actions"><button id="export">↓ Export JSON</button><button id="sync">↻ Sync shared archive</button><button id="clear">Clear local data</button></div></section>
+    <section class="archive"><div><p class="eyebrow">KEEP THE WHOLE STORY</p><h3>Your lifetime archive</h3><p>${staticDeployment ? 'Points stay privately in this browser. Export a backup to move them between phones.' : 'Points stay in this browser until you back them up or share them.'}</p></div><div class="archive-actions"><button id="export">↓ Export JSON</button><button id="sync" ${staticDeployment ? 'disabled title="Server sync needs a private backend"' : ''}>${staticDeployment ? 'Shared sync unavailable' : '↻ Sync shared archive'}</button><button id="clear">Clear local data</button></div></section>
     <footer><span>FIELDNOTES / made for curious creatures</span><span>Independent companion interface · Not affiliated with PetTracer</span></footer>
   </main>`;
 
@@ -111,7 +113,7 @@ $('export').onclick = () => {
   notify('Exported all lifetime points and places as a restorable JSON backup.');
 };
 $('clear').onclick = () => {
-  if (!confirm('Clear points and places from this browser? Export a backup first. The shared archive is unaffected.')) return;
+  if (!confirm(`Clear points and places from this browser? Export a backup first.${staticDeployment ? '' : ' The shared archive is unaffected.'}`)) return;
   points = []; places = []; demo = false; persist(); render(); notify('Local archive cleared.');
 };
 $('demo').onclick = () => {
@@ -122,6 +124,7 @@ $('demo').onclick = () => {
   demo = true; $('demo').textContent = 'Exit demo'; $('from').value = ''; $('to').value = ''; render(true); notify('Demonstration data only — these are fictional locations. Your local archive is untouched.');
 };
 $('sync').onclick = async () => {
+  if (staticDeployment) { notify('GitHub Pages stores data only in this browser. Use Export JSON and Import points to move history between phones.'); return; }
   if (demo) { notify('Exit demo before syncing your shared archive.'); return; }
   $('sync').disabled = true;
   try {

@@ -1,6 +1,6 @@
 # Fieldnotes for PetTracer
 
-A phone-friendly companion interface with an interactive Leaflet map, lifetime point archive, date filters, saved places, and estimated time outside the home radius. Runs on Cloudflare Pages with an optional private shared D1 archive.
+A phone-friendly companion interface with an interactive Leaflet map, lifetime point archive, date filters, saved places, and estimated time outside the home radius. The public interface deploys to GitHub Pages.
 
 **Live PetTracer ingestion is not implemented.** The public portal could not be inspected because the development environment's proxy returned HTTP 403 at CONNECT, even after its hostname was allowed. No API endpoints, authentication flow, or historical-data availability have been verified. The portal has no export option according to the owner. Imports are a generic fallback for independently acquired data, not a verified PetTracer export integration. Demo data is fictional and never stored or synced.
 
@@ -46,20 +46,18 @@ Duration is assigned to the **preceding fix** in each interval up to 15 minutes 
 
 The lifetime archive is not limited to the portal's retention window, but it can only contain points actually collected. It cannot recover historical points PetTracer no longer exposes. Very large archives will eventually need server-side date filtering, aggregation and map simplification; this first version loads the full archive and draws selected fixes in the browser.
 
-## Deploy privately on Cloudflare Pages
+## Deploy on GitHub Pages
 
-Cloudflare account setup and deployment have not been executed. Do not enable real location uploads until Access is configured.
+The workflow in `.github/workflows/deploy-pages.yml` tests, builds and deploys every push to `main`.
 
-1. Create a D1 database named `pettracer` using the Cloudflare dashboard or `npx wrangler d1 create pettracer`. Replace the placeholder `database_id` in `wrangler.toml` with the returned ID. This is an identifier, not a secret.
-2. Apply the production migration: `npx wrangler d1 migrations apply pettracer --remote`.
-3. Create a Pages project, with build command `npm run build` and output directory `dist`. The repository root contains `functions/`; Pages compiles these server-side routes separately. Choose Node 24 for builds. Bind the D1 database as `DB` (the wrangler file declares the binding).
-   If Cloudflare asks for a deploy command, use `npm run deploy`. Do not use `npx wrangler deploy`; that command deploys Workers rather than Pages.
-4. In Cloudflare Zero Trust, create a self-hosted Access application covering the **entire production hostname**, with a policy allowing only your and your partner's email addresses. Configure an identity provider such as email one-time PIN.
-5. Set Pages runtime variables `ACCESS_TEAM_DOMAIN` to your actual `your-team.cloudflareaccess.com` hostname and `ACCESS_AUD` to the application's audience tag. Both are non-secret identifiers. Redeploy after configuration. The API verifies Access JWT signatures, issuer and audience, and rejects cross-origin mutations. It does not trust email headers alone.
-6. Protect preview deployments with Access as well or disable them for real data. Never use demo mode to validate private access.
-7. Sign in on each phone. Confirm a signed-out request to `/api/archive` is denied, import a small real sample, sync, then verify it appears after syncing the other phone. Export a backup. Neither the actual identity-provider login nor production D1 access has been validated in development.
+1. Open the repository's **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Open the **Actions** tab and allow the `Deploy to GitHub Pages` workflow to finish.
+4. Visit `https://dominicdale.github.io/PetTracer/`.
 
-The shared database holds one household/collar archive for the two allowed users. It is append-only for points, with a configurable set of places. There is no scheduled collector yet: Cloudflare Pages Functions do not provide scheduled triggers. Automatic collection will need a separate scheduled Worker after the PetTracer API is understood. Keep any future PetTracer credentials in server-side Cloudflare secrets, never Vite client variables or browser bundles.
+GitHub Pages is a public static host. The site code and URL are public, but imported locations stay in that browser's local storage and are not uploaded to GitHub. Use **Export JSON** and **Import points** to transfer the archive between your phones. Anyone using the URL gets their own empty browser archive. Shared server-side syncing and automatic collar collection require a separate private backend and are disabled in the GitHub Pages build.
+
+The Cloudflare Functions and D1 prototype remains in the repository for a future private backend. Keep any future PetTracer credentials in server-side secrets, never Vite client variables or browser bundles.
 
 ## Next: connect PetTracer
 
